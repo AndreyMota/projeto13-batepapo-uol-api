@@ -50,7 +50,8 @@ app.post('/participants', (req, res) => {
                         .then(() => {
                             db.collection('messages').insertOne(message)
                                 .then(() => {
-                                    res.sendStatus(201);
+                                    res.status(201).send('Mensagem de status adicionada');
+
                                 })
                                 .catch(error => {
                                     console.log(error);
@@ -144,25 +145,24 @@ app.post('/messages', (req, res) => {
 app.get('/messages', (req, res) => {
     const user = req.headers.user;
     const limit = parseInt(req.query.limit);
-
-    if (isNaN(limit) || limit <= 0) {
-        res.status(422).send('Limite inválido');
-        return;
-    }
-
+    
     const query = {
         $or: [
             { type: 'message' },
+            { type: 'status' },
             { from: 'Todos' },
             { to: user },
             { from: user }
         ]
     };
 
-    db.collection('messages').find(query)
-        .sort({ _id: -1 })
-        .limit(limit)
-        .toArray()
+    let messagesQuery = db.collection('messages').find(query).sort({ _id: -1 });
+
+    if (!isNaN(limit) && limit > 0) {
+        messagesQuery = messagesQuery.limit(limit);
+    }
+
+    messagesQuery.toArray()
         .then(messages => {
             res.send(messages);
         })
