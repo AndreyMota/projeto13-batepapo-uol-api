@@ -3,6 +3,8 @@ import express from "express";
 import cors from 'cors';
 import { MongoClient } from 'mongodb';
 import dotenv from "dotenv";
+import dayjs from 'dayjs';
+
 dotenv.config();
 const api = process.env.DATABASE_URL;
 const mongoClient = new MongoClient(api);
@@ -11,7 +13,6 @@ let db;
 mongoClient.connect()
  .then(() => db = mongoClient.db())
  .catch((err) => console.log(err.message));
-
 
 const app = express();
 app.use(cors());
@@ -24,15 +25,10 @@ const userSchema = joi.object({
     email: joi.string().email().required()
 });
 
-
-
-import dayjs from 'dayjs';
-
-
 app.post('/participants', (req, res) => {
     const name = req.body.name;
-    if (!nome) {
-        res.status(422);
+    if (!name) {
+        res.status(422).send('Nome inválido');
         return;
     }
     const currentTime = dayjs().format('HH:mm:ss');
@@ -49,21 +45,36 @@ app.post('/participants', (req, res) => {
             if (participant) {
                 res.status(409).send('Usuário já existe');
             } else {
-                db.collection('participants').insertOne({ name: name, lastStatus: Date.now() })
-                    .then(() => {
-                        db.collection('messages').insertOne(message)
-                            .then(() => {
-                                res.sendStatus(201);
-                            })
-                            .catch(error => {
-                                console.log(error);
-                                res.status(500).send('Erro interno do servidor');
-                            });
-                    })
-                    .catch(error => {
-                        console.log(error);
-                        res.status(500).send('Erro interno do servidor');
-                    });
+                const insertParticipant = () => {
+                    db.collection('participants').insertOne({ name: name, lastStatus: Date.now() })
+                        .then(() => {
+                            db.collection('messages').insertOne(message)
+                                .then(() => {
+                                    res.sendStatus(201);
+                                })
+                                .catch(error => {
+                                    console.log(error);
+                                    res.status(500).send('Erro interno do servidor');
+                                });
+                        })
+                        .catch(error => {
+                            console.log(error);
+                            res.status(500).send('Erro interno do servidor');
+                        });
+                };
+
+                db.collection('participants').findOneAndUpdate(
+                    { name: name },
+                    { $set: { lastStatus: Date.now() } },
+                    { upsert: true }
+                )
+                .then(() => {
+                    insertParticipant();
+                })
+                .catch(error => {
+                    console.log(error);
+                    res.status(500).send('Erro interno do servidor');
+                });
             }
         })
         .catch(error => {
@@ -71,7 +82,6 @@ app.post('/participants', (req, res) => {
             res.status(500).send('Erro interno do servidor');
         });
 });
-
 
 
 app.get('/participants', (req, res) => {
@@ -191,9 +201,9 @@ app.post('/status', (req, res) => {
         console.log(error);
         res.status(500).send('Erro interno do servidor');
       });
-  });
+});
 
-  setInterval(() => {
+setInterval(() => {
     const inactiveTimeThreshold = Date.now() - 10000; // 10 segundos atrás
   
     db.collection('participants')
@@ -234,13 +244,11 @@ app.post('/status', (req, res) => {
         console.log('Erro ao buscar participants inativos: ', error);
       });
   }, 15000); // Executar a cada 15 segundos
-  
-  
-
-
-
-
 
 app.get('/', (req, res) => {
-    res.send('Main Page')
-})
+    res.send('Main Page');
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor ouvindo na porta ${PORT}`);
+});
